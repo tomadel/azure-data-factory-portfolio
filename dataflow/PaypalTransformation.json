@@ -1,0 +1,107 @@
+{
+    "name": "PaypalTransformation",
+    "properties": {
+        "type": "MappingDataFlow",
+        "typeProperties": {
+            "sources": [
+                {
+                    "dataset": {
+                        "referenceName": "PaypalPayments",
+                        "type": "DatasetReference"
+                    },
+                    "name": "PaypalTransactions"
+                },
+                {
+                    "dataset": {
+                        "referenceName": "PaypalProducts",
+                        "type": "DatasetReference"
+                    },
+                    "name": "PaypalProducts"
+                }
+            ],
+            "sinks": [
+                {
+                    "dataset": {
+                        "referenceName": "DelimitedText1",
+                        "type": "DatasetReference"
+                    },
+                    "name": "TransfertoDB"
+                }
+            ],
+            "transformations": [
+                {
+                    "name": "PaypalJoin"
+                },
+                {
+                    "name": "StatusFilter"
+                }
+            ],
+            "scriptLines": [
+                "source(output(",
+                "          id as string,",
+                "          {Created date (UTC)} as string,",
+                "          Amount as string,",
+                "          {Amount Refunded} as string,",
+                "          Currency as string,",
+                "          Captured as string,",
+                "          {Converted Amount} as string,",
+                "          {Converted Amount Refunded} as string,",
+                "          {Converted Currency} as string,",
+                "          Description as string,",
+                "          Fee as string,",
+                "          Status as string,",
+                "          {Seller Message} as string,",
+                "          {Card ID} as string,",
+                "          {Customer ID} as string,",
+                "          {Invoice ID} as string,",
+                "          Transfer as string,",
+                "          {price_id (metadata)} as string,",
+                "          {product_id (metadata)} as string",
+                "     ),",
+                "     allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     ignoreNoFilesFound: false) ~> PaypalTransactions",
+                "source(output(",
+                "          id as string,",
+                "          Name as string,",
+                "          {Date (UTC)} as string,",
+                "          {Tax Code} as string",
+                "     ),",
+                "     allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     ignoreNoFilesFound: false) ~> PaypalProducts",
+                "PaypalTransactions, PaypalProducts join({product_id (metadata)} == PaypalProducts@id,",
+                "     joinType:'left',",
+                "     matchType:'exact',",
+                "     ignoreSpaces: false,",
+                "     broadcast: 'auto')~> PaypalJoin",
+                "PaypalJoin filter(equals(Status, \"Paid\")) ~> StatusFilter",
+                "StatusFilter sink(allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     input(",
+                "          id as string,",
+                "          {Created date (UTC)} as string,",
+                "          Amount as string,",
+                "          {Amount Refunded} as string,",
+                "          Currency as string,",
+                "          Captured as string,",
+                "          {Converted Amount} as string,",
+                "          {Converted Amount Refunded} as string,",
+                "          {Converted Currency} as string,",
+                "          Description as string,",
+                "          Fee as string,",
+                "          Status as string,",
+                "          {Seller Message} as string,",
+                "          {Card ID} as string,",
+                "          {Customer ID} as string,",
+                "          {Invoice ID} as string,",
+                "          Transfer as string,",
+                "          {price_id (metadata)} as string,",
+                "          {product_id (metadata)} as string",
+                "     ),",
+                "     skipDuplicateMapInputs: true,",
+                "     skipDuplicateMapOutputs: true) ~> TransfertoDB"
+            ]
+        }
+    }
+}
