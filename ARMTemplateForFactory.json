@@ -1,0 +1,449 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory name",
+            "defaultValue": "gd-portfolio-adf"
+        },
+        "AzureBlobStorage1_connectionString": {
+            "type": "secureString",
+            "metadata": "Secure string for 'connectionString' of 'AzureBlobStorage1'"
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureBlobStorage1')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureBlobStorage",
+                "typeProperties": {
+                    "connectionString": "[parameters('AzureBlobStorage1_connectionString')]"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/PaypalTransformation')]",
+            "type": "Microsoft.DataFactory/factories/dataflows",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "type": "MappingDataFlow",
+                "typeProperties": {
+                    "sources": [
+                        {
+                            "dataset": {
+                                "referenceName": "PaypalPayments",
+                                "type": "DatasetReference"
+                            },
+                            "name": "PaypalTransactions"
+                        },
+                        {
+                            "dataset": {
+                                "referenceName": "PaypalProducts",
+                                "type": "DatasetReference"
+                            },
+                            "name": "PaypalProducts"
+                        }
+                    ],
+                    "sinks": [
+                        {
+                            "dataset": {
+                                "referenceName": "DelimitedText1",
+                                "type": "DatasetReference"
+                            },
+                            "name": "TransfertoDB"
+                        }
+                    ],
+                    "transformations": [
+                        {
+                            "name": "PaypalJoin"
+                        },
+                        {
+                            "name": "StatusFilter"
+                        }
+                    ],
+                    "scriptLines": [
+                        "source(output(",
+                        "          id as string,",
+                        "          {Created date (UTC)} as string,",
+                        "          Amount as string,",
+                        "          {Amount Refunded} as string,",
+                        "          Currency as string,",
+                        "          Captured as string,",
+                        "          {Converted Amount} as string,",
+                        "          {Converted Amount Refunded} as string,",
+                        "          {Converted Currency} as string,",
+                        "          Description as string,",
+                        "          Fee as string,",
+                        "          Status as string,",
+                        "          {Seller Message} as string,",
+                        "          {Card ID} as string,",
+                        "          {Customer ID} as string,",
+                        "          {Invoice ID} as string,",
+                        "          Transfer as string,",
+                        "          {price_id (metadata)} as string,",
+                        "          {product_id (metadata)} as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> PaypalTransactions",
+                        "source(output(",
+                        "          id as string,",
+                        "          Name as string,",
+                        "          {Date (UTC)} as string,",
+                        "          {Tax Code} as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> PaypalProducts",
+                        "PaypalTransactions, PaypalProducts join({product_id (metadata)} == PaypalProducts@id,",
+                        "     joinType:'left',",
+                        "     matchType:'exact',",
+                        "     ignoreSpaces: false,",
+                        "     broadcast: 'auto')~> PaypalJoin",
+                        "PaypalJoin filter(equals(Status, \"Paid\")) ~> StatusFilter",
+                        "StatusFilter sink(allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     input(",
+                        "          id as string,",
+                        "          {Created date (UTC)} as string,",
+                        "          Amount as string,",
+                        "          {Amount Refunded} as string,",
+                        "          Currency as string,",
+                        "          Captured as string,",
+                        "          {Converted Amount} as string,",
+                        "          {Converted Amount Refunded} as string,",
+                        "          {Converted Currency} as string,",
+                        "          Description as string,",
+                        "          Fee as string,",
+                        "          Status as string,",
+                        "          {Seller Message} as string,",
+                        "          {Card ID} as string,",
+                        "          {Customer ID} as string,",
+                        "          {Invoice ID} as string,",
+                        "          Transfer as string,",
+                        "          {price_id (metadata)} as string,",
+                        "          {product_id (metadata)} as string",
+                        "     ),",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true) ~> TransfertoDB"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/PaypalPayments')]",
+                "[concat(variables('factoryId'), '/datasets/PaypalProducts')]",
+                "[concat(variables('factoryId'), '/datasets/DelimitedText1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/PaypalTransformationPipeline')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "PaypalTransformation",
+                        "type": "ExecuteDataFlow",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "dataflow": {
+                                "referenceName": "PaypalTransformation",
+                                "type": "DataFlowReference",
+                                "parameters": {},
+                                "datasetParameters": {
+                                    "PaypalTransactions": {},
+                                    "PaypalProducts": {},
+                                    "TransfertoDB": {}
+                                }
+                            },
+                            "staging": {},
+                            "compute": {
+                                "coreCount": 8,
+                                "computeType": "General"
+                            },
+                            "traceLevel": "Fine"
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2025-05-25T09:00:00Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/dataflows/PaypalTransformation')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/DelimitedText1')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureBlobStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "container": "adfblobstorage"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "id",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Created date (UTC)",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Amount",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Amount Refunded",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Currency",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Captured",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Converted Amount",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Converted Amount Refunded",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Converted Currency",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Description",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Fee",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Status",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Seller Message",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Card ID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Customer ID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Invoice ID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Transfer",
+                        "type": "String"
+                    },
+                    {
+                        "name": "price_id (metadata)",
+                        "type": "String"
+                    },
+                    {
+                        "name": "product_id (metadata)",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureBlobStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/PaypalProducts')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureBlobStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "Products.csv",
+                        "container": "adfblobstorage"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "id",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Name",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Date (UTC)",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Tax Code",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureBlobStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/PaypalPayments')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureBlobStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "PayPal Payments.csv",
+                        "container": "adfblobstorage"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "id",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Created date (UTC)",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Amount",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Amount Refunded",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Currency",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Captured",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Converted Amount",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Converted Amount Refunded",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Converted Currency",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Description",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Fee",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Status",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Seller Message",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Card ID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Customer ID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Invoice ID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Transfer",
+                        "type": "String"
+                    },
+                    {
+                        "name": "price_id (metadata)",
+                        "type": "String"
+                    },
+                    {
+                        "name": "product_id (metadata)",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureBlobStorage1')]"
+            ]
+        }
+    ]
+}
